@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User profiles - users can read any profile but only write their own
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Creator posts - creators can create/update/delete their own posts, public read
+    match /creators/{creatorId}/posts/{postId} {
+      allow create: if request.auth != null 
+                    && request.auth.token.role == 'creator' 
+                    && request.auth.uid == creatorId;
+      allow read: if true; // public read
+      allow update, delete: if request.auth != null 
+                            && request.auth.token.role == 'creator' 
+                            && request.auth.uid == creatorId;
+    }
+
+    // User feeds - only the user can read their own feed
+    match /feeds/{userId}/items/{itemId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // only server / Cloud Functions should write
+    }
+
+    // Post likes - users can like/unlike posts, public read
+    match /posts/{postId}/likes/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+    }
+
+    // Comments on posts - authenticated users can create, read, and delete their own comments
+    match /posts/{postId}/comments/{commentId} {
+      allow create: if request.auth != null;
+      allow read: if true; // public read
+      allow update, delete: if request.auth != null 
+                            && request.auth.uid == resource.data.authorId;
+    }
+
+    // Nested comments (replies) - same rules as main comments
+    match /posts/{postId}/comments/{commentId}/replies/{replyId} {
+      allow create: if request.auth != null;
+      allow read: if true; // public read
+      allow update, delete: if request.auth != null 
+                            && request.auth.uid == resource.data.authorId;
+    }
+
+    // Comment likes - users can like/unlike comments
+    match /posts/{postId}/comments/{commentId}/likes/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+    }
+
+    // User notifications - only the user can read/write their notifications
+    match /users/{userId}/notifications/{notificationId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Creator analytics - only creators can access their analytics
+    match /creators/{creatorId}/analytics/{analyticsId} {
+      allow read, write: if request.auth != null 
+                         && request.auth.token.role == 'creator' 
+                         && request.auth.uid == creatorId;
+    }
+
+    // Admin collections - only admin users can access
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null 
+                         && request.auth.token.role == 'admin';
+    }
+
+    // Public content collections
+    match /public/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}
