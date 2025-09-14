@@ -10,12 +10,18 @@ service cloud.firestore {
     // Creator posts - creators can create/update/delete their own posts, public read
     match /creators/{creatorId}/posts/{postId} {
       allow create: if request.auth != null 
-                    && request.auth.token.role == 'creator' 
                     && request.auth.uid == creatorId;
       allow read: if true; // public read
       allow update, delete: if request.auth != null 
-                            && request.auth.token.role == 'creator' 
                             && request.auth.uid == creatorId;
+    }
+
+    // General posts - any authenticated user can create posts
+    match /posts/{postId} {
+      allow create: if request.auth != null;
+      allow read: if true; // public read
+      allow update, delete: if request.auth != null 
+                            && request.auth.uid == resource.data.authorId;
     }
 
     // User feeds - only the user can read their own feed

@@ -18,7 +18,24 @@ import { db } from '../firebase';
 
 class FirestoreService {
   // Posts operations
-  async createPost(creatorId, postData) {
+  async createPost(authorId, postData) {
+    try {
+      const docRef = await addDoc(collection(db, 'posts'), {
+        ...postData,
+        authorId: authorId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        likesCount: 0,
+        commentsCount: 0
+      });
+      return { success: true, id: docRef.id };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Creator posts (legacy support)
+  async createCreatorPost(creatorId, postData) {
     try {
       const docRef = await addDoc(collection(db, 'creators', creatorId, 'posts'), {
         ...postData,
@@ -33,7 +50,23 @@ class FirestoreService {
     }
   }
 
-  async getPost(creatorId, postId) {
+  // Get general post
+  async getPost(postId) {
+    try {
+      const docRef = doc(db, 'posts', postId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return { success: true, data: { id: docSnap.id, ...docSnap.data() } };
+      } else {
+        return { success: false, error: 'Post not found' };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Get creator post (legacy support)
+  async getCreatorPost(creatorId, postId) {
     try {
       const docRef = doc(db, 'creators', creatorId, 'posts', postId);
       const docSnap = await getDoc(docRef);
@@ -47,7 +80,33 @@ class FirestoreService {
     }
   }
 
-  async getPosts(creatorId, limitCount = 10, lastDoc = null) {
+  // Get all posts (general)
+  async getAllPosts(limitCount = 10, lastDoc = null) {
+    try {
+      let q = query(
+        collection(db, 'posts'),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
+      
+      if (lastDoc) {
+        q = query(q, startAfter(lastDoc));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      const posts = [];
+      querySnapshot.forEach((doc) => {
+        posts.push({ id: doc.id, ...doc.data() });
+      });
+      
+      return { success: true, data: posts };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Get creator posts (legacy support)
+  async getCreatorPosts(creatorId, limitCount = 10, lastDoc = null) {
     try {
       let q = query(
         collection(db, 'creators', creatorId, 'posts'),
@@ -71,7 +130,32 @@ class FirestoreService {
     }
   }
 
-  async updatePost(creatorId, postId, updateData) {
+  // Update general post
+  async updatePost(postId, updateData) {
+    try {
+      const docRef = doc(db, 'posts', postId);
+      await updateDoc(docRef, {
+        ...updateData,
+        updatedAt: serverTimestamp()
+      });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Delete general post
+  async deletePost(postId) {
+    try {
+      await deleteDoc(doc(db, 'posts', postId));
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Update creator post (legacy support)
+  async updateCreatorPost(creatorId, postId, updateData) {
     try {
       const docRef = doc(db, 'creators', creatorId, 'posts', postId);
       await updateDoc(docRef, {
@@ -84,7 +168,8 @@ class FirestoreService {
     }
   }
 
-  async deletePost(creatorId, postId) {
+  // Delete creator post (legacy support)
+  async deleteCreatorPost(creatorId, postId) {
     try {
       await deleteDoc(doc(db, 'creators', creatorId, 'posts', postId));
       return { success: true };

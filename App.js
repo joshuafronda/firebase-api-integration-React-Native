@@ -8,11 +8,13 @@ import {
   TouchableOpacity, 
   ScrollView, 
   Alert,
-  SafeAreaView 
+  SafeAreaView,
+  Image
 } from 'react-native';
 import authService from './services/authService';
 import firestoreService from './services/firestoreService';
 import CommentsSection from './components/CommentsSection';
+import CreatePost from './components/CreatePost';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -29,6 +31,9 @@ export default function App() {
   const [passwordError, setPasswordError] = useState('');
   const [displayNameError, setDisplayNameError] = useState('');
   const [generalError, setGeneralError] = useState('');
+  
+  // Create post mode
+  const [createPostMode, setCreatePostMode] = useState(false);
 
   useEffect(() => {
     // Listen to auth state changes
@@ -43,17 +48,35 @@ export default function App() {
   }, []);
 
   const loadPosts = async () => {
-    // This would typically load from a specific creator
-    // For demo purposes, we'll create a mock post
-    setPosts([{
-      id: 'demo-post-1',
-      title: 'Welcome to our platform!',
-      content: 'This is a demo post to showcase the comments functionality.',
-      author: 'Demo Creator',
-      createdAt: new Date(),
-      likesCount: 0,
-      commentsCount: 0
-    }]);
+    try {
+      const result = await firestoreService.getAllPosts(20);
+      if (result.success) {
+        setPosts(result.data);
+      } else {
+        // Fallback to demo post if no real posts
+        setPosts([{
+          id: 'demo-post-1',
+          title: 'Welcome to our platform!',
+          content: 'This is a demo post to showcase the comments functionality.',
+          authorName: 'Demo Creator',
+          createdAt: new Date(),
+          likesCount: 0,
+          commentsCount: 0
+        }]);
+      }
+    } catch (error) {
+      console.error('Error loading posts:', error);
+      // Fallback to demo post
+      setPosts([{
+        id: 'demo-post-1',
+        title: 'Welcome to our platform!',
+        content: 'This is a demo post to showcase the comments functionality.',
+        authorName: 'Demo Creator',
+        createdAt: new Date(),
+        likesCount: 0,
+        commentsCount: 0
+      }]);
+    }
   };
 
   // Validation functions
@@ -155,15 +178,28 @@ export default function App() {
     }
   };
 
-  const handleCreatePost = async () => {
+  const handleCreatePost = () => {
     if (!user) {
       Alert.alert('Error', 'Please log in to create posts');
       return;
     }
-
-    // For demo purposes, we'll just show an alert
-    Alert.alert('Create Post', 'Post creation functionality would be implemented here');
+    setCreatePostMode(true);
   };
+
+  const handlePostCreated = () => {
+    setCreatePostMode(false);
+    loadPosts(); // Reload posts to show the new one
+  };
+
+  // Show create post mode if enabled
+  if (createPostMode) {
+    return (
+      <CreatePost 
+        onPostCreated={handlePostCreated}
+        onCancel={() => setCreatePostMode(false)}
+      />
+    );
+  }
 
   if (!user) {
     return (
@@ -172,6 +208,7 @@ export default function App() {
           <Text style={styles.title}>
             {isSignUp ? 'Create Account' : 'Sign In'}
           </Text>
+          
           
           {isSignUp && (
             <View>
@@ -325,13 +362,16 @@ export default function App() {
             onPress={() => setSelectedPost(post)}
           >
             <Text style={styles.postTitle}>{post.title}</Text>
+            {post.imageUrl && (
+              <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
+            )}
             <Text style={styles.postContent} numberOfLines={2}>
               {post.content}
             </Text>
             <View style={styles.postFooter}>
-              <Text style={styles.postAuthor}>By {post.author}</Text>
+              <Text style={styles.postAuthor}>By {post.authorName || post.author}</Text>
               <Text style={styles.postStats}>
-                👍 {post.likesCount} • 💬 {post.commentsCount}
+                👍 {post.likesCount || 0} • 💬 {post.commentsCount || 0}
               </Text>
             </View>
           </TouchableOpacity>
@@ -494,6 +534,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+    marginBottom: 12,
+  },
+  postImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
     marginBottom: 12,
   },
   postFooter: {
